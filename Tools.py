@@ -1,4 +1,6 @@
 import webbrowser
+import keyboard
+import subprocess
 import requests
 import pywhatkit
 import urllib.parse
@@ -16,6 +18,10 @@ from gmail import gmail_auth
 from googleapiclient.discovery import build
 from email.mime.text import MIMEText
 import base64
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+import screen_brightness_control as sbc
 
 
 @tool
@@ -36,6 +42,16 @@ def play_youtube(video_name:str):
     pywhatkit.playonyt(video_name)
 
     return f"Playing {video_name} on YouTube"
+
+@tool
+def pause_play_media():
+    """
+    Pause or play currently playing media.
+    """
+
+    keyboard.send("play/pause media")
+
+    return "Media playback toggled"
 
 @tool
 def get_tool_price(symbol:str) -> dict:
@@ -366,6 +382,71 @@ def send_professional_email(receiver_name: str,sender_name:str,receiver_email: s
                 "message": "Email sending cancel due to some technical issue."
             }
     
+
+###################################### Volume control #########################
+def get_volume_controller():
+
+    device = AudioUtilities.GetSpeakers()
+
+    return device.EndpointVolume
+
+
+@tool
+def volume_up():
+    """Increase system volume"""
+
+    volume = get_volume_controller()
+
+    current = volume.GetMasterVolumeLevelScalar()
+
+    volume.SetMasterVolumeLevelScalar(
+        min(current + 0.1, 1.0),
+        None
+    )
+
+    return "Volume increased"
+
+
+@tool
+def volume_down():
+    """Decrease system volume"""
+
+    volume = get_volume_controller()
+
+    current = volume.GetMasterVolumeLevelScalar()
+
+    volume.SetMasterVolumeLevelScalar(
+        max(current - 0.1, 0.0),
+        None
+    )
+
+    return "Volume decreased"
+
+############################## Brightness ######################
+@tool
+def brightness_up():
+    """Increase screen brightness"""
+
+    current = sbc.get_brightness()[0]
+
+    sbc.set_brightness(
+        min(current + 10, 100)
+    )
+
+    return "Brightness increased"
+
+
+@tool
+def brightness_down():
+    """Decrease screen brightness"""
+
+    current = sbc.get_brightness()[0]
+
+    sbc.set_brightness(
+        max(current - 10, 0)
+    )
+
+    return "Brightness decreased"
 search_tool = DuckDuckGoSearchRun(region='us-en')
 
 wiki = WikipediaQueryRun(
