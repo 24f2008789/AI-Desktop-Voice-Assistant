@@ -30,7 +30,7 @@ def open_website(url:str) -> str:
 
     webbrowser.open(url)
 
-    return "f{url} opened successfully"
+    return f"{url} opened successfully"
 
 @tool
 def play_youtube(video_name:str):
@@ -41,17 +41,19 @@ def play_youtube(video_name:str):
 
     pywhatkit.playonyt(video_name)
 
-    return f"Playing {video_name} on YouTube"
+    return f"{video_name} started successfully"
 
 @tool
-def pause_play_media():
-    """
-    Pause or play currently playing media.
-    """
-
+def pause_media():
+    """Use pause_media only when user says pause."""
     keyboard.send("play/pause media")
+    return "Media paused successfully"
 
-    return "Media playback toggled"
+@tool
+def play_media():
+    """Use play_media only when user says resume/play."""
+    keyboard.send("play/pause media")
+    return "Media resumed successfully"
 
 @tool
 def get_tool_price(symbol:str) -> dict:
