@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<script src="siriwave.js"></script>
+
+<style>
+
+body{
+    margin:0;
+    background:#070B1A;
+    overflow:hidden;
+}
+
+#wave{
+    width:100%;
+    height:100vh;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="wave"></div>
+
+<script>
+
+var siriWave = new SiriWave({
+
+    container: document.getElementById("wave"),
+
+    width: 1200,
+
+    height: 150,
+
+    style: "ios9",
+
+    amplitude: 1,
+
+    speed: 0.12,
+
+    autostart: true
+
+});
+
+</script>
+
+</body>
+
+</html>

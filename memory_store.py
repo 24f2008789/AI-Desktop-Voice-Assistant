@@ -35,7 +35,7 @@ def retrieve_memories(query):
 
     results = collection.query(
         query_texts=[query],
-        n_results=2
+        n_results=5
     )
 
     docs = results["documents"][0]

@@ -3,11 +3,11 @@ import asyncio
 import sqlite3
 
 from Tools import *
-from main import speak
+# from main import speak
 from dotenv import load_dotenv
 from typing import TypedDict,Annotated
 from langgraph.graph.message import add_messages
-from langchain_core.messages import BaseMessage,HumanMessage, AIMessage,SystemMessage
+from langchain_core.messages import BaseMessage,HumanMessage, AIMessage,SystemMessage,ToolMessage
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.sqlite import SqliteSaver
 from memory_store import save_memory, retrieve_memories
@@ -34,7 +34,7 @@ model = ChatGroq(
     temperature=0
 )
 classifier_model = ChatGroq(
-    model="qwen/qwen3-32b",
+    model="llama-3.1-8b-instant",
     temperature=0
 )
 llm_tool = model.bind_tools(tools)
@@ -48,6 +48,8 @@ class ClassState(TypedDict):
     plan: list[dict]
 
     observations: list
+
+    current_step: int
 
     task_completed: bool
 
@@ -138,16 +140,13 @@ def chat_node(state: ClassState):
         messages = [system_personna, system_memory] + recent_history
 
         resp = llm_tool.invoke(messages)
-
+        print(resp)
+        print("TOOL CALLS:", resp.tool_calls)
         memory = extract_memory(user_query)
 
         if memory != "NONE":
             save_memory(memory)
-
-        ai_text = resp.content
-        print("AI Response:", ai_text)
-        if ai_text:
-            asyncio.run(speak(ai_text))
+            
         return {
             "messages": [resp]
         }
@@ -219,16 +218,34 @@ def planner_condition(state: ClassState):
     return "chat_node"
 
 def planner_node(state):
+    print("-------------------------planner_node----------------")
+    query = ""
 
-    query = state["messages"][-1].content
+    # Find latest human message
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            query = msg.content
+            break
 
     prompt = f"""
     User Request:
+    You are an AI planner.
+
+    You have access to tools.
+
+    Create a numbered step-by-step plan.
+
+    Rules:
+    - Assume tools can perform actions.
+    - Never say "I am a text based AI".
+    - Never say "I cannot do this".
+    - Break the task into executable steps.
+    - Keep steps short.
+
+    User Request:
     {query}
 
-    Create a short and accurate plan 
-
-    Return plain text.
+    Return only the plan.
     """
 
     resp = model.invoke(prompt)
@@ -236,168 +253,166 @@ def planner_node(state):
     print("PLAN:" , resp.content)
 
     return {
-        "plan": resp.content
+        "plan": resp.content,
+        "current_step": 0
     }
+
+MAX_EXECUTOR_ITERATIONS = 3  # hard cap to prevent infinite loops
 
 def executor_node(state):
+    print("-------------------------executor_node----------------")
 
-    if state.get("task_completed", False):
+    # Hard cap on iterations
+    iterations = state.get("current_step", 0)
+    if iterations >= MAX_EXECUTOR_ITERATIONS:
+        print(f"[Executor] Hit max iterations ({MAX_EXECUTOR_ITERATIONS}), stopping")
         return {
-            "messages":[
-                AIMessage(content="Task completed successfully.")
-            ]
+            "messages": [AIMessage(content="I completed all the steps I could.")],
+            "task_completed": True
         }
 
-    query = state["messages"][-1].content
-
-    prompt = f"""
-    If information is missing or ask to need ot fetch some information then use search tool:
-    USE TOOLS.
-
-    Never write tool names as text.
-
-    User Goal:
-    {query}
-
-    Plan:
-    {state.get("plan", "")}
-
-    Previous Observations:
-    {state.get("observations", [])}
-
-    Available Tools:
-    {list(tool_registry.keys())}
-
-    Instructions:
-
-    1. Analyze the goal.
-    2. Decide if another tool is required.
-    3. If a tool is required, call the appropriate tool.
-    4. If the goal is already completed, DO NOT call any tool.
-    5. If the goal is completed, answer normally.
-
-    Important:
-
-    - Never write tool calls as text.
-    - Never write XML tags.
-    - Never write:
-    <function=...>
-    - Never manually generate JSON tool calls.
-    - Use the actual tool-calling mechanism only.
-
-    If a tool is needed:
-    CALL THE TOOL.
-    If goal completed:
-    STOP
-
-    If no tool is needed:
-    Respond with the final answer.
-    """
-
-    try:
-        memory_context = get_memories()
-
-        resp = llm_tool.invoke([
-                SystemMessage(content=memory_context),
-                HumanMessage(content=prompt)
-            ])
-
-    except Exception as e:
-
-        print("Tool Calling Error:", e)
-
-        return {
-            "messages":[
-                AIMessage(
-                    content="I encountered an issue while using tools. Let me try another approach."
-                )
-            ]
-        }
-    print("complex_Tool_Calling", resp.tool_calls)
-    
-    print("Executor : ", resp.content)
-
-    return {
-        "messages":[resp]
-    }
-
-def completion_checker(state):
-
-    query = state["messages"][0].content
+    query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            query = msg.content
+            break
 
     observations = state.get("observations", [])
+    plan = state.get("plan", "")
 
-    prompt = f"""
-    User Goal:
-    {query}
+    # Build observations summary for context
+    obs_summary = ""
+    for i, obs in enumerate(observations):
+        result = obs.get("tool_result", "")
+        obs_summary += f"\nStep {i+1} result: {result[:300]}\n"
 
-    Observations:
-    {observations}
+    system_msg = SystemMessage(content=f"""
+        You are an execution agent completing a user's task step by step.
 
-    Based on observations,
-    has the user goal been completed?
+        USER GOAL: {query}
 
-    Answer only:
+        PLAN:
+        {plan}
 
-    YES
+        COMPLETED STEPS ({len(observations)} done so far):
+        {obs_summary if obs_summary else "None yet"}
 
-    or
+        YOUR JOB NOW:
+        - Look at what steps are already done (see observations above)
+        - Find the NEXT step that is NOT yet done
+        - Execute ONLY that one step using the correct tool
+        - If web search results already exist in observations, DO NOT search again — use those results
+        - If ALL steps are done, say so in plain text without calling any tool
 
-    NO
-    """
+        TOOLS AVAILABLE: {list(tool_registry.keys())}
 
-    resp = model.invoke(prompt)
+        STRICT RULES:
+        - Call at most ONE tool per response
+        - Never repeat a tool call that already has a result in observations
+        - Never write tool names as text — use actual tool calls
+        - If search results exist, use them to proceed to the next step (e.g., play YouTube)
+        """)
 
-    completed = "yes" in resp.content.lower()
+    try:
+        resp = llm_tool.invoke([system_msg])
+    except Exception as e:
+        print("Tool Calling Error:", e)
+        return {
+            "messages": [AIMessage(content="I had trouble with that step, moving on.")],
+        }
 
-    print("TASK COMPLETED =", completed)
-
-    return {
-        "task_completed": completed
-    }
+    print("complex_Tool_Calling", resp.tool_calls)
+    print("Executor response:", resp.content)
+    return {"messages": [resp]}
 
 def executor_router(state: ClassState):
-    
-    print("executor_roouter reached")
+    print("executor_router reached")
     last_message = state["messages"][-1]
 
     if getattr(last_message, "tool_calls", None):
-
         return "tools"
-
     return "completion"
 
-def observation_node(state):
-
-    last_message = state["messages"][-1]
-
-    observation = str(last_message.content)
-
-    print("OBSERVATION : ", observation)
-
-    old = state.get("observations", [])
-
-    return {
-        "observations": old + [observation]
-    }
 
 def completion_router(state):
-
-    if state["task_completed"]:
+    if state.get("task_completed", False):
         return "completion"
-
     return "executor_agent"
 
-def completion_node(state):
+def observation_node(state):
+    last_message = state["messages"][-1]
 
-    answer = state["messages"][-1].content
+    if isinstance(last_message, ToolMessage):
+        observation = {"tool_result": last_message.content}
+    else:
+        observation = {"tool_result": str(last_message.content)}
 
-    print("FINAL ANSWER:", answer)
+    print("OBSERVATION:", observation["tool_result"][:200])
 
-    asyncio.run(speak(answer))
-
+    old = state.get("observations", [])
     return {
-        "final_answer": answer
+        "observations": old + [observation],
+        "current_step": state.get("current_step", 0) + 1
+    }
+
+
+def completion_checker(state):
+    """
+    Stop if:
+    - executor returned no tool calls (it decided it's done)
+    - OR we hit the max iteration cap
+    """
+    last_message = state["messages"][-1]
+    iterations = state.get("current_step", 0)
+
+    # If last message has no tool calls → executor decided it's done
+    has_tool_calls = bool(getattr(last_message, "tool_calls", None))
+    hit_cap = iterations >= MAX_EXECUTOR_ITERATIONS
+
+    # Also stop if last message is a plain text answer (not a tool call)
+    is_final_answer = (
+        isinstance(last_message, AIMessage)
+        and last_message.content
+        and not has_tool_calls
+    )
+
+    completed = is_final_answer or hit_cap
+
+    print(f"[completion_checker] step={iterations}, tool_calls={has_tool_calls}, "
+          f"is_final={is_final_answer}, hit_cap={hit_cap} → completed={completed}")
+
+    return {"task_completed": completed}
+
+def completion_node(state):
+    query = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            query = msg.content
+            break
+
+    observations = state.get("observations", [])
+
+    # Build a readable summary of what was done
+    obs_text = "\n".join([
+        f"Step {i+1}: {o.get('tool_result','')[:400]}"
+        for i, o in enumerate(observations)
+    ])
+
+    prompt = f"""
+        User Goal: {query}
+
+        What was accomplished:
+        {obs_text}
+
+        Write a short, natural conversational response telling the user what was done.
+        Keep it brief and friendly. Reply in the same language as the user.
+        Do NOT write MEMORY: or NONE in your response.
+        """
+    resp = model.invoke(prompt)
+    print("FINAL ANSWER:", resp.content)
+    return {
+        "messages": [resp],
+        "final_answer": resp.content
     }
 
 conn = sqlite3.connect(database='chatbot.db', check_same_thread=False)
@@ -410,8 +425,8 @@ graph.add_node("simple_tools", ToolNode(tools))
 graph.add_node("executor_tools", ToolNode(tools))
 graph.add_node("planner", planner_node)
 graph.add_node("executor_agent" , executor_node)
-graph.add_node("completion_checker",completion_checker)
 graph.add_node("observation",observation_node)
+graph.add_node("completion_checker",completion_checker)
 graph.add_node("completion",completion_node)
 
 
@@ -457,3 +472,55 @@ graph.add_conditional_edges(
 graph.add_edge("completion", END)
 
 chatbot = graph.compile(checkpointer=checkpointer)
+
+def load_thread_messages(thread_id: str):
+    """
+    Return all messages stored for a given thread_id.
+    """
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    state = chatbot.get_state(config)
+
+    if state.values is None:
+        return []
+
+    return state.values.get("messages", [])
+
+def delete_thread_from_database(thread_id: str):
+    """Delete all checkpoints and writes for a thread."""
+    conn = sqlite3.connect("chatbot.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "DELETE FROM checkpoints WHERE thread_id=?", (thread_id,)
+        )
+        # Also delete from checkpoint_writes if it exists
+        try:
+            cursor.execute(
+                "DELETE FROM checkpoint_writes WHERE thread_id=?", (thread_id,)
+            )
+        except Exception:
+            pass  # table may not exist
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_all_thread_ids():
+    """Return unique thread IDs ordered by most recent."""
+    conn = sqlite3.connect("chatbot.db")
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT DISTINCT thread_id
+            FROM checkpoints
+            ORDER BY rowid DESC
+        """)
+        rows = cur.fetchall()
+        return [row[0] for row in rows]  # ← return strings not tuples
+    finally:
+        conn.close()

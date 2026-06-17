@@ -41,7 +41,7 @@ def play_youtube(video_name:str):
 
     pywhatkit.playonyt(video_name)
 
-    return f"{video_name} started successfully"
+    return f"Successfully played {video_name} on youtube "
 
 @tool
 def pause_media():
@@ -79,6 +79,8 @@ def send_whatsapp_message(contact: str, message: str) -> str:
     """
 
     decision = interrupt({
+        "contact": contact,
+        "message" : message,
         "question": f'Should the message "{message}" be sent to "{contact}"?'
     })
     
@@ -449,6 +451,7 @@ def brightness_down():
     )
 
     return "Brightness decreased"
+
 search_tool = DuckDuckGoSearchRun(region='us-en')
 
 wiki = WikipediaQueryRun(
