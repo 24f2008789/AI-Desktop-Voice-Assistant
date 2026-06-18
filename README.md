@@ -76,7 +76,7 @@ LangGraph Workflow
  ┌─┴──────────────┐
  │                │
  ▼                ▼
-Gemini LLM     Tool Executor
+Groq LLM     Tool Executor
  │                │
  ▼                ▼
 Memory      Desktop Automation
@@ -100,7 +100,7 @@ ChromaDB + SQLite
 
 ## Large Language Model
 
-- Google Gemini API
+- Groq LLM
 
 ## Vector Database
 
@@ -112,12 +112,13 @@ ChromaDB + SQLite
 
 ## Frontend
 
-- Tkinter
+- pySide6QT
 
 ## Voice Processing
 
 - SpeechRecognition
 - pyttsx3
+- Edge-TTS
 
 ## Utilities
 
@@ -133,7 +134,7 @@ ChromaDB + SQLite
 ```
 AI_DESKTOP_ASSISTANT/
 │
-├── app.py
+├── voice.py
 ├── graph.py
 ├── memory_store.py
 ├── Tools.py
@@ -221,34 +222,21 @@ GOOGLE_API_KEY=YOUR_API_KEY
 # ▶️ Run the Project
 
 ```bash
-python app.py
+python -m frontend.app
 ```
 
 ---
 
 # 📸 Application Preview
 
-> Add screenshots of your GUI here.
 
-Example:
-
-```
-assets/
-├── home.png
-├── chat.png
-├── voice.png
-```
-
-Then include:
-
-```markdown
 ## Home Screen
 
 ![Home](assets/home.png)
 
 ## Chat Window
 
-![Chat](assets/chat.png)
+![Chat](assets/HITL.png)
 ```
 
 ---
@@ -262,18 +250,17 @@ Then include:
 - Smart reminders
 - File management
 - OCR support
-- Image generation
-- Local LLM support
+- Vision power
 
 ---
 
 # 👨‍💻 Author
 
-**Your Name**
+**Dishant Khatri**
 
-GitHub: https://github.com/yourusername
+GitHub: https://github.com/24f2008789
 
-LinkedIn: https://linkedin.com/in/yourprofile
+LinkedIn: https://linkedin.com/in/dishant-khatri-a97204360
 
 ---
 
