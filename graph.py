@@ -3,7 +3,6 @@ import asyncio
 import sqlite3
 
 from Tools import *
-# from main import speak
 from dotenv import load_dotenv
 from typing import TypedDict,Annotated
 from langgraph.graph.message import add_messages
@@ -22,7 +21,8 @@ hf_token = os.getenv("HUGGINGFACEHUB_ACCESS_TOKEN")
 
 tools = [open_website,play_youtube,pause_media,play_media,search_tool,wiki,get_tool_price,
         send_whatsapp_message,check_unread_emails,read_email_by_sender,send_professional_email,
-        brightness_up,brightness_down,volume_up,volume_down]
+        brightness_up,brightness_down,volume_up,volume_down,find_files_from_file_manager,load_pdf_to_rag_tool,
+        retrieve_from_rag_tool]
 
 tool_registry = {
     tool.name: tool

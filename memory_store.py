@@ -13,6 +13,11 @@ collection = client.get_or_create_collection(
     embedding_function=embedding_fn
 )
 
+pdf_collection = client.get_or_create_collection(
+    name="pdf_rag",
+    embedding_function=embedding_fn
+)
+
 def save_memory(memory_text):
 
     existing = collection.query(

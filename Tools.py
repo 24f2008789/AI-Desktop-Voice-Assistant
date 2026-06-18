@@ -1,9 +1,11 @@
 import webbrowser
+import os
 import keyboard
 import subprocess
 import requests
 import pywhatkit
 import urllib.parse
+from pathlib import Path
 from langchain_core.tools import tool
 from langgraph.types import interrupt
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -21,7 +23,12 @@ import base64
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from ctypes import cast, POINTER
 from comtypes import CLSCTX_ALL
-import screen_brightness_control as sbc
+import screen_brightness_control as sb
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from memory_store import pdf_collection
 
 
 @tool
@@ -452,6 +459,119 @@ def brightness_down():
 
     return "Brightness decreased"
 
+@tool
+def find_files_from_file_manager(filename: str) -> str:
+    """
+    Search PDF file frol file explorer.
+    Returns full file path.
+    """
+    
+    try:
+        if not filename:
+            return "Error: filename is empty." 
+        downloads = Path.home() / "Downloads"
+        matches = []
+        for file in downloads.rglob("*.pdf"):
+            if not file.is_file():
+                continue
+
+            if filename.lower() in file.stem.lower():
+                matches.append(str(file))
+
+        if not matches:
+            return "No file found."
+        return "\n".join(matches[:10])
+    
+    except Exception as e:
+        return f"Error searching PDF: {str(e)}"
+    
+loaded_files = set()
+
+@tool
+def load_pdf_to_rag_tool(pdf_path: str) -> str:
+    """
+    Load PDF into vector database.
+    """
+
+    try:
+
+        if not pdf_path:
+
+            return "Error: Empty PDF path."
+        
+        if pdf_path in loaded_files:
+
+            return "PDF already loaded."
+        
+        if not os.path.exists(pdf_path):
+
+            return "Error: PDF file does not exist."
+
+        loader = PyPDFLoader(pdf_path)
+
+        docs = loader.load()
+
+        if not docs:
+
+            return "Error: PDF contains no readable text."
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+
+        chunks = splitter.split_documents(docs)
+
+        if not chunks:
+
+            return "Error: No chunks generated."
+
+        filename = os.path.basename(pdf_path)
+
+        for chunk in chunks:
+
+            chunk.metadata["source"] = filename
+
+        pdf_collection.add_documents(chunks)
+
+        return (
+            f"Successfully loaded "
+            f"{filename} into RAG. "
+            f"Chunks created: {len(chunks)}"
+        )
+
+    except Exception as e:
+
+        return f"PDF loading failed: {str(e)}"
+
+@tool
+def retrieve_from_rag_tool(question: str) -> str:
+    """
+    Search loaded PDF knowledge.
+    """
+
+    try:
+
+        docs = pdf_collection.similarity_search(
+            question,
+            k=5
+        )
+
+        if not docs:
+
+            return "No relevant information found."
+
+        context = "\n\n".join(
+            doc.page_content
+            for doc in docs
+        )
+
+        return context
+
+    except Exception as e:
+
+        return f"RAG retrieval failed: {str(e)}"
+    
 search_tool = DuckDuckGoSearchRun(region='us-en')
 
 wiki = WikipediaQueryRun(
