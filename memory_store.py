@@ -1,6 +1,7 @@
 import os
 import uuid
 import chromadb
+import hashlib
 from pypdf import PdfReader
 from chromadb.utils import embedding_functions
 from langchain_text_splitters import RecursiveCharacterTextSplitter
