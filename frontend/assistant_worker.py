@@ -5,7 +5,7 @@ from PySide6.QtCore import QThread
 from voice import listen, speak
 from PySide6.QtCore import QThread, Signal
 
-from langchain_core.messages import BaseMessage,HumanMessage, AIMessage,SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.types import Command
 from graph import chatbot
 
@@ -48,7 +48,7 @@ class AssistantWorker(QThread):
         self.thread_id = thread_id
 
     def run(self):
-        asyncio.run(speak("Hello,My name is Sierra, Mai aapki kya help kar sakti hu "))
+        asyncio.run(speak("Hello, My name is Sierra, Mai aapki kya help kar sakti hu "))
         print("Assistant Started")
         while self.running:
             config = {"configurable" : {"thread_id" : self.thread_id}}

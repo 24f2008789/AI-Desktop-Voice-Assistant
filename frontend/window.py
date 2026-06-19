@@ -1,6 +1,7 @@
 # ui/main_window.py
 import os
 import uuid
+import asyncio
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
@@ -17,6 +18,8 @@ from graph import (
     get_all_thread_ids,
     delete_thread_from_database   # ← import from graph.py
 )
+from memory_store import load_pdf_to_chroma
+from voice import speak
 
 
 class MainWindow(QMainWindow):
@@ -331,7 +334,24 @@ class MainWindow(QMainWindow):
     def clear_chat(self):
         self.clear_layout(self.chat_layout)
         self.current_ai_label = None
+    
+    def upload_pdf(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select PDF File",
+            "",
+            "PDF Files (*.pdf)",
+            options=QFileDialog.Option.DontUseNativeDialog
+        )
 
+        if file_path:
+            success = load_pdf_to_chroma(file_path)
+            if success:
+                filename = os.path.basename(file_path)
+                asyncio.run(speak(f"{filename} loaded successfully"))
+            else:
+                asyncio.run(speak("Sorry, I couldn't load that PDF"))
+            
     # ─────────────────────────────────────────────────────────
     # INIT / UI BUILD
     # ─────────────────────────────────────────────────────────
@@ -415,7 +435,14 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.scroll_area, 1)
 
         # Start/Stop button
-        self.start_btn = QPushButton("🎤 START ASSISTANT")
+
+        row = QWidget()
+        down_layout = QHBoxLayout(row)
+        down_layout.setContentsMargins(4, 2, 4, 2)
+        down_layout.setSpacing(4)
+
+        # Thread button
+        self.start_btn = QPushButton("🎤 Start Assistant")
         self.start_btn.setFixedHeight(50)
         self.start_btn.setCursor(Qt.PointingHandCursor)
         self.start_btn.clicked.connect(self.toggle_assistant)
@@ -427,7 +454,29 @@ class MainWindow(QMainWindow):
             }
             QPushButton:hover { background: #00DD77; }
         """)
-        left_layout.addWidget(self.start_btn)
+
+        # file button — small +
+        self.upload_btn = QPushButton()
+        self.upload_btn.setFixedSize(40, 40)
+        self.upload_btn.setText("+")
+        self.upload_btn.setStyleSheet("""
+        QPushButton{
+            border:none;
+            font-size:22px;
+            color:white;
+            background:transparent;
+        }
+
+        QPushButton:hover{
+            color:#4CAF50;
+        }
+        """)
+        self.upload_btn.clicked.connect(self.upload_pdf)
+        self.upload_btn.setCursor(Qt.PointingHandCursor)
+
+        down_layout.addWidget(self.start_btn, 1)
+        down_layout.addWidget(self.upload_btn)
+        left_layout.addWidget(row)
 
         # ══ RIGHT PANEL ═════════════════════════════════════
         right_panel = QFrame()

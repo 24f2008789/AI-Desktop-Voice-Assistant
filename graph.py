@@ -9,7 +9,7 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage,HumanMessage, AIMessage,SystemMessage,ToolMessage
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.sqlite import SqliteSaver
-from memory_store import save_memory, retrieve_memories
+from memory_store import save_memory, retrieve_memories,retrieve_pdf_context,list_loaded_pdfs
 
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, START ,END
@@ -127,6 +127,18 @@ def chat_node(state: ClassState):
                 break
         
         memory_context = retrieve_memories(user_query)
+        pdf_context = ""
+        if list_loaded_pdfs():
+            pdf_context = retrieve_pdf_context(user_query)
+        if pdf_context:
+            system_pdf = SystemMessage(
+            content=f"""
+            Use the following PDF information if it helps answer the user's question.
+
+            PDF Context:
+
+            {pdf_context}
+            """)
         
         system_memory = SystemMessage(content=f"""
                 Below given information is just your knowledge purpose, 
@@ -137,7 +149,10 @@ def chat_node(state: ClassState):
                 """
             )
         recent_history = state["messages"][-8:]
-        messages = [system_personna, system_memory] + recent_history
+        if pdf_context:
+            messages = [system_personna, system_memory, system_pdf] + recent_history
+        else:
+            messages = [system_personna, system_memory] + recent_history
 
         resp = llm_tool.invoke(messages)
         print(resp)
@@ -192,6 +207,7 @@ def task_classifier(state: ClassState):
     - Find a restaurant and send directions to WhatsApp
     - Create folder, create file, and write code
     - Research a topic and generate report
+    - find the pdf file from local file explorer and upload it to RAG fro further question answer
 
     User Request:
     {query}

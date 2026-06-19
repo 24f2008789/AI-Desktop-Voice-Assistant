@@ -1,33 +1,30 @@
-import webbrowser
 import os
+import time
+import webbrowser
 import keyboard
-import subprocess
+import base64
+import pyautogui
 import requests
 import pywhatkit
 import urllib.parse
+
 from pathlib import Path
 from langchain_core.tools import tool
 from langgraph.types import interrupt
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
-from playwright.sync_api import sync_playwright
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
 from pywinauto.application import Application
-import pyautogui
-import time
 from pywinauto.keyboard import send_keys
 from gmail import gmail_auth
 from googleapiclient.discovery import build
 from email.mime.text import MIMEText
-import base64
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities
 import screen_brightness_control as sb
 
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from memory_store import pdf_collection
 
 
